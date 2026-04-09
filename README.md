@@ -1,7 +1,7 @@
 # Projeto Final - Pipeline ELT CFPB com Script Python Customizado
 
 **Domínio:** Finanças  
-**Dataset:** CFPB Consumer Finance Complaints (3M+ registros)  
+**Dataset:** CFPB Consumer Finance Complaints (~500k registros)  
 **Diferencial:** Script Python customizado para ingestão (SEM Airbyte)
 
 ---
@@ -22,7 +22,7 @@ Você é Analista de Dados Sênior do Departamento de Compliance de uma institui
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│               CFPB CSV (3M+ registros)                       │
+│               CFPB CSV (500K+ registros)                       │
 └─────────────────────────────────────────────────────────────┘
                           │
                           ▼
@@ -68,11 +68,7 @@ Você é Analista de Dados Sênior do Departamento de Compliance de uma institui
 
 ## 🚀 Quick Start (15 minutos)
 
-### 1. Baixar Dataset
-```bash
-mkdir -p data
-curl -o data/complaints.csv "https://files.consumerfinance.gov/ccdb/complaints.csv"
-# Ou sample: head -n 100001 complaints.csv > data/complaints_sample.csv
+### 1. Baixar Datase e colocar em data
 ```
 
 ### 2. Subir Ambiente
@@ -160,19 +156,6 @@ python scripts/ingest_cfpb.py
 
 ---
 
-## ✅ Conformidade com Requisitos
-
-| Ferramenta | Requisitos | Status |
-|------------|-----------|--------|
-| **Script Python** | Substitui Airbyte | ✅ 100% |
-| **PostgreSQL** | 3 schemas, medallion | ✅ 100% |
-| **Great Expectations** | 8 expectativas | ✅ 100% |
-| **dbt** | Star Schema completo | ✅ 100% |
-| **Airflow** | 8 tasks orquestradas | ✅ 100% |
-| **Docker** | 5 containers | ✅ 100% |
-| **TOTAL** | 25/25 requisitos | ✅ 100% |
-
----
 
 ## 🐳 Containers Docker
 
@@ -287,7 +270,7 @@ docker exec -it projeto_postgres psql -U postgres -d projeto -c "SELECT 1;"
 
 ## 📊 Métricas de Performance
 
-**Ingestão de 3.5M registros:**
+**Ingestão de ~500k registros:**
 - Tempo: ~4-5 minutos
 - Taxa: ~12k-15k registros/segundo
 - Memória: ~500MB (chunks de 10k)
@@ -309,6 +292,4 @@ docker exec -it projeto_postgres psql -U postgres -d projeto -c "SELECT 1;"
 
 ---
 
-**Versão:** 2.0 (Script Python Customizado)  
-**Data:** Abril 2026  
-**Status:** ✅ PRONTO PARA PRODUÇÃO
+
