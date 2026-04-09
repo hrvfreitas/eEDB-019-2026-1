@@ -309,6 +309,4 @@ docker exec -it projeto_postgres psql -U postgres -d projeto -c "SELECT 1;"
 
 ---
 
-**Versão:** 2.0 (Script Python Customizado)  
-**Data:** Abril 2026  
-**Status:** ✅ PRONTO PARA PRODUÇÃO
+
