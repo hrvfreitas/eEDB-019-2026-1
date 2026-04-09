@@ -35,9 +35,14 @@ cleaned AS (
         consumer_complaint_narrative AS complaint_narrative,
         COALESCE(NULLIF(TRIM(submitted_via), ''), 'Unknown') AS submitted_via,
         COALESCE(NULLIF(TRIM(tags), ''), 'None') AS tags,
-        CASE WHEN date_sent_to_company IS NOT NULL AND date_received IS NOT NULL
-             THEN DATE_PART('day', CAST(date_sent_to_company AS DATE) - CAST(date_received AS DATE))
-             ELSE NULL END AS response_days,
+        
+       
+        CASE 
+            WHEN date_sent_to_company IS NOT NULL AND date_received IS NOT NULL
+            THEN CAST(date_sent_to_company AS DATE) - CAST(date_received AS DATE)
+            ELSE NULL 
+        END AS response_days,
+        
         CURRENT_TIMESTAMP AS dbt_loaded_at
     FROM source
     WHERE complaint_id IS NOT NULL
