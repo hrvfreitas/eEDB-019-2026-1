@@ -3,9 +3,7 @@
 ## Comandos Rápidos
 
 ```bash
-# 1. Baixar dataset
-mkdir -p data
-curl -o data/complaints.csv "https://files.consumerfinance.gov/ccdb/complaints.csv"
+# 1. Baixar dataset e salvar em data/complaints.csv"
 
 # 2. Subir Docker
 docker-compose up -d
