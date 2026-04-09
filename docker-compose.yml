@@ -6,7 +6,7 @@ services:
   # POSTGRES (RAW / SILVER / GOLD)
   # ============================================================
   postgres:
-    image: postgres:15
+    image: postgres:16-alpine
     container_name: projeto_postgres
     restart: unless-stopped
     environment:
@@ -18,113 +18,212 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init_db:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cfpb_network
 
   # ============================================================
-  # AIRBYTE (SERVER + WORKER)
+  # PYTHON INGESTION SERVICE
+  # Container customizado para rodar script de ingestão
   # ============================================================
-  airbyte-server:
-    image: airbyte/server:latest
-    container_name: projeto_airbyte_server
-    restart: unless-stopped
-    ports:
-      - "8000:8000"
-    environment:
-      - AIRBYTE_ROLE=server
+  ingestion:
+    build:
+      context: ./scripts
+      dockerfile: Dockerfile.ingestion
+    container_name: projeto_ingestion
     depends_on:
-      - postgres
-    volumes:
-      - airbyte_data:/data
-
-  airbyte-worker:
-    image: airbyte/worker:latest
-    container_name: projeto_airbyte_worker
-    restart: unless-stopped
+      postgres:
+        condition: service_healthy
     environment:
-      - AIRBYTE_ROLE=worker
-    depends_on:
-      - airbyte-server
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: projeto
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      DATA_PATH: /data/complaints.csv
     volumes:
-      - airbyte_data:/data
+      - ./data:/data
+      - ./scripts:/scripts
+    networks:
+      - cfpb_network
+    # Modo: rodar manualmente ou via Airflow
+    # docker-compose run ingestion python /scripts/ingest_cfpb.py
 
   # ============================================================
   # AIRFLOW (WEB + SCHEDULER + TRIGGERER + INIT)
   # ============================================================
   airflow-init:
-    image: apache/airflow:2.8.1
+    image: apache/airflow:2.8.1-python3.11
     container_name: projeto_airflow_init
     entrypoint: >
       bash -c "
+      pip install --no-cache-dir psycopg2-binary pandas great-expectations &&
       airflow db init &&
       airflow users create \
         --username admin \
         --password admin \
-        --firstname admin \
-        --lastname admin \
+        --firstname Admin \
+        --lastname User \
         --role Admin \
-        --email admin@email.com
+        --email admin@example.com || true
       "
     environment:
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://postgres:postgres@postgres:5432/projeto
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://postgres:postgres@postgres:5432/airflow
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__FERNET_KEY: ''
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+      AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: 'true'
+      _AIRFLOW_DB_MIGRATE: 'true'
+      _AIRFLOW_WWW_USER_CREATE: 'true'
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     volumes:
       - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+      - ./great_expectations:/opt/airflow/great_expectations
+      - ./dbt:/opt/airflow/dbt
+      - ./scripts:/opt/airflow/scripts
+      - ./data:/data
+    networks:
+      - cfpb_network
 
   airflow-webserver:
-    image: apache/airflow:2.8.1
+    image: apache/airflow:2.8.1-python3.11
     container_name: projeto_airflow_webserver
     restart: unless-stopped
     depends_on:
-      - airflow-init
+      airflow-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://postgres:postgres@postgres:5432/projeto
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__FERNET_KEY: ''
+      AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: 'true'
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: projeto
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
     ports:
       - "8080:8080"
-    command: airflow webserver
+    command: >
+      bash -c "
+      pip install --no-cache-dir psycopg2-binary pandas great-expectations &&
+      airflow webserver
+      "
     volumes:
       - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+      - ./great_expectations:/opt/airflow/great_expectations
+      - ./dbt:/opt/airflow/dbt
+      - ./scripts:/opt/airflow/scripts
+      - ./data:/data
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - cfpb_network
 
   airflow-scheduler:
-    image: apache/airflow:2.8.1
+    image: apache/airflow:2.8.1-python3.11
     container_name: projeto_airflow_scheduler
     restart: unless-stopped
     depends_on:
-      - airflow-webserver
+      airflow-webserver:
+        condition: service_healthy
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://postgres:postgres@postgres:5432/projeto
-    command: airflow scheduler
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__FERNET_KEY: ''
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: projeto
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    command: >
+      bash -c "
+      pip install --no-cache-dir psycopg2-binary pandas great-expectations &&
+      airflow scheduler
+      "
     volumes:
       - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+      - ./great_expectations:/opt/airflow/great_expectations
+      - ./dbt:/opt/airflow/dbt
+      - ./scripts:/opt/airflow/scripts
+      - ./data:/data
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type SchedulerJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - cfpb_network
 
   airflow-triggerer:
-    image: apache/airflow:2.8.1
+    image: apache/airflow:2.8.1-python3.11
     container_name: projeto_airflow_triggerer
     restart: unless-stopped
     depends_on:
-      - airflow-webserver
+      airflow-webserver:
+        condition: service_healthy
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://postgres:postgres@postgres:5432/projeto
-    command: airflow triggerer
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__FERNET_KEY: ''
+    command: >
+      bash -c "
+      pip install --no-cache-dir psycopg2-binary pandas great-expectations &&
+      airflow triggerer
+      "
     volumes:
       - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+      - ./great_expectations:/opt/airflow/great_expectations
+      - ./dbt:/opt/airflow/dbt
+      - ./scripts:/opt/airflow/scripts
+      - ./data:/data
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type TriggererJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - cfpb_network
 
   # ============================================================
-  # DBT (EXECUÇÃO)
+  # DBT (EXECUÇÃO VIA CONTAINER STANDALONE)
   # ============================================================
   dbt:
     image: ghcr.io/dbt-labs/dbt-postgres:1.7.0
     container_name: projeto_dbt
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     working_dir: /usr/app
     volumes:
       - ./dbt:/usr/app
       - ./dbt/profiles:/root/.dbt
+    networks:
+      - cfpb_network
+    # Para rodar manualmente: docker-compose run dbt run
 
   # ============================================================
   # METABASE (DASHBOARD)
@@ -135,12 +234,31 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
+    environment:
+      MB_DB_TYPE: postgres
+      MB_DB_DBNAME: projeto
+      MB_DB_PORT: 5432
+      MB_DB_USER: postgres
+      MB_DB_PASS: postgres
+      MB_DB_HOST: postgres
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     volumes:
       - metabase_data:/metabase-data
+    networks:
+      - cfpb_network
 
+# ============================================================
+# NETWORKS
+# ============================================================
+networks:
+  cfpb_network:
+    driver: bridge
+
+# ============================================================
+# VOLUMES PERSISTENTES
+# ============================================================
 volumes:
   postgres_data:
-  airbyte_data:
   metabase_data:

@@ -1,0 +1,18 @@
+version: 2
+
+sources:
+  - name: raw
+    description: Schema RAW com dados do script Python
+    database: projeto
+    schema: raw
+    tables:
+      - name: consumer_complaints
+        description: Reclamações CFPB carregadas via script Python
+        columns:
+          - name: complaint_id
+            tests:
+              - unique
+              - not_null
+          - name: date_received
+            tests:
+              - not_null

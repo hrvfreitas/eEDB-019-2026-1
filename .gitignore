@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.log
+target/
+dbt_packages/
+logs/
+data/*.csv
+great_expectations/uncommitted/
+.DS_Store
+*.swp

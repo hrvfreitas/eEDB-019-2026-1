@@ -1,0 +1,36 @@
+name: 'cfpb_complaints'
+version: '1.0.0'
+config-version: 2
+
+profile: 'cfpb'
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+  - "logs"
+
+vars:
+  start_date: '2015-01-01'
+  timely_response_threshold_days: 15
+
+models:
+  cfpb_complaints:
+    +materialized: table
+    +schema: silver
+    
+    staging:
+      +materialized: view
+      +schema: silver
+      +tags: ["staging", "silver"]
+    
+    gold:
+      +materialized: table
+      +schema: gold
+      +tags: ["gold", "analytics"]

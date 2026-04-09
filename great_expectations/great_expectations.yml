@@ -1,0 +1,19 @@
+config_version: 3.0
+
+datasources:
+  cfpb_postgres:
+    class_name: Datasource
+    execution_engine:
+      class_name: SqlAlchemyExecutionEngine
+      connection_string: postgresql://postgres:postgres@postgres:5432/projeto
+    data_connectors:
+      default_inferred_data_connector:
+        class_name: InferredAssetSqlDataConnector
+        include_schema_name: true
+
+stores:
+  expectations_store:
+    class_name: ExpectationsStore
+    store_backend:
+      class_name: TupleFilesystemStoreBackend
+      base_directory: expectations/

@@ -1,0 +1,14 @@
+version: 2
+
+models:
+  - name: fact_complaints
+    columns:
+      - name: complaint_sk
+        tests:
+          - unique
+          - not_null
+      - name: product_sk
+        tests:
+          - relationships:
+              to: ref('dim_product')
+              field: product_sk
