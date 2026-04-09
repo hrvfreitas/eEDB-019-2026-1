@@ -245,7 +245,7 @@ projeto-cfpb-pipeline/
 ls -lh data/complaints.csv
 
 # Baixar se necessário
-curl -o data/complaints.csv "https://files.consumerfinance.gov/ccdb/complaints.csv"
+ e salvar em data/complaints.csv"
 ```
 
 ### Erro: "Connection refused"
