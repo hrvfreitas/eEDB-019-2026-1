@@ -2,7 +2,7 @@
 DAG CFPB Complaints Pipeline - Versão com Script Python Customizado
 Substitui Airbyte por script Python de ingestão customizado
 
-Autor: Hercules (NUSP: 5479786)
+
 Projeto: PECE Big Data - Fundamentos de Engenharia de Dados
 """
 
