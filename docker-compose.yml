@@ -224,6 +224,33 @@ services:
     networks:
       - cfpb_network
     # Para rodar manualmente: docker-compose run dbt run
+  # ===========================================================================
+  # DBT DOCS — Servidor de documentação (opcional)
+  #
+  # Sobe o servidor de docs gerado pelo dbt docs generate.
+  # Acesse: http://localhost:8080
+  #
+  # Uso: docker compose up dbt-docs
+  # (execute apenas após: docker compose run --rm dbt dbt docs generate)
+  # ===========================================================================
+  dbt-docs:
+    build:
+      context: .
+      dockerfile: Dockerfile.dbt
+    container_name: pncp_dbt_docs
+    depends_on:
+      - postgres
+    environment:
+      DBT_PROFILES_DIR: /app
+      DBT_PROJECT_DIR:  /app
+    volumes:
+      - .:/app
+      - dbt_target:/app/target
+    ports:
+      - "8080:8080"
+    command: dbt docs serve --host 0.0.0.0 --port 8080
+    networks:
+      - pncp_net
 
   # ============================================================
   # METABASE (DASHBOARD)
