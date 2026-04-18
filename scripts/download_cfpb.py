@@ -81,7 +81,7 @@ class KaggleDatasetDownloader:
 if __name__ == "__main__":
     dataset_slug = os.getenv(
         "KAGGLE_DATASET_SLUG",
-        "adamkelbrick/cfpb-consumer-complaint-database",
+        "kaggle/us-consumer-finance-complaints",
     )
     output_dir = os.getenv("DATA_PATH_DIR", "/data")
 
