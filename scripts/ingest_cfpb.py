@@ -132,6 +132,7 @@ def create_table(conn):
         loaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
 
+    -- Índices para performance
     CREATE INDEX IF NOT EXISTS idx_complaint_id ON raw.consumer_complaints(complaint_id);
     CREATE INDEX IF NOT EXISTS idx_date_received ON raw.consumer_complaints(date_received);
     CREATE INDEX IF NOT EXISTS idx_company ON raw.consumer_complaints(company);
@@ -167,25 +168,31 @@ def clean_dataframe(df):
     """
     Limpa e prepara DataFrame para inserção
     """
+    # Renomear colunas conforme mapeamento
     df = df.rename(columns=Config.COLUMN_MAPPING)
 
+    # Remover colunas que não estão no mapeamento
     expected_cols = list(Config.COLUMN_MAPPING.values())
     df = df[[col for col in df.columns if col in expected_cols]]
 
+    # Converter datas
     date_cols = ['date_received', 'date_sent_to_company']
     for col in date_cols:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors='coerce')
 
+    # Limpar ZIP codes (remover sufixos)
     if 'zip_code' in df.columns:
         df['zip_code'] = df['zip_code'].astype(str).str[:5]
         df['zip_code'] = df['zip_code'].replace('nan', None)
 
+    # Converter complaint_id para inteiro
     if 'complaint_id' in df.columns:
         df['complaint_id'] = pd.to_numeric(df['complaint_id'], errors='coerce')
         df = df.dropna(subset=['complaint_id'])
         df['complaint_id'] = df['complaint_id'].astype(int)
 
+    # Substituir NaN por None (NULL no PostgreSQL)
     df = df.where(pd.notnull(df), None)
 
     return df
@@ -195,8 +202,10 @@ def insert_batch(conn, df, batch_num):
     Insere batch de dados usando INSERT em massa
     """
     try:
+        # Preparar dados para inserção
         records = df.to_dict('records')
 
+        # Colunas na ordem correta
         columns = [
             'complaint_id', 'date_received', 'product', 'sub_product',
             'issue', 'sub_issue', 'consumer_complaint_narrative',
@@ -206,6 +215,7 @@ def insert_batch(conn, df, batch_num):
             'timely_response', 'consumer_disputed'
         ]
 
+        # SQL de inserção com ON CONFLICT (upsert)
         insert_sql = sql.SQL("""
             INSERT INTO raw.consumer_complaints ({})
             VALUES ({})
@@ -234,6 +244,7 @@ def insert_batch(conn, df, batch_num):
         )
 
         with conn.cursor() as cur:
+            # Executar inserção em massa
             values = [[rec.get(col) for col in columns] for rec in records]
             extras.execute_batch(cur, insert_sql, values, page_size=1000)
             conn.commit()
@@ -251,9 +262,11 @@ def validate_data(conn):
     """
     try:
         with conn.cursor() as cur:
+            # Total de registros
             cur.execute("SELECT COUNT(*) FROM raw.consumer_complaints;")
             total = cur.fetchone()[0]
-
+            
+            # Registros com datas válidas
             cur.execute("""
                 SELECT COUNT(*)
                 FROM raw.consumer_complaints
@@ -261,6 +274,7 @@ def validate_data(conn):
             """)
             valid_dates = cur.fetchone()[0]
 
+            # Produtos distintos
             cur.execute("""
                 SELECT COUNT(DISTINCT product)
                 FROM raw.consumer_complaints;
@@ -305,12 +319,17 @@ def main():
 
     logger.info(f"Arquivo selecionado: {data_path}")
 
+    # Conectar ao banco
     conn = get_db_connection()
 
     try:
+        # Criar tabela
         create_table(conn)
+        
+        # Truncar para Full Refresh
         truncate_table(conn)
 
+        # Processar CSV em chunks
         logger.info("📥 Processando CSV em chunks...")
         total_records = 0
         batch_num = 0
@@ -324,14 +343,19 @@ def main():
             batch_num += 1
             logger.info(f"\n📦 Processando batch {batch_num}...")
 
+            # Limpar dados
             chunk = clean_dataframe(chunk)
+
+            # Inserir no banco
             insert_batch(conn, chunk, batch_num)
 
             total_records += len(chunk)
             logger.info(f"  Total acumulado: {total_records:,} registros")
 
+        # Validar dados
         validate_data(conn)
 
+        # Finalizar
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
 
