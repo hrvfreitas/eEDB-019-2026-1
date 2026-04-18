@@ -68,7 +68,17 @@ Você é Analista de Dados Sênior do Departamento de Compliance de uma institui
 
 ## 🚀 Quick Start (15 minutos)
 
-### 1. Baixar Datase e colocar em data
+### 1. Download automático do dataset (Kaggle API)
+
+O dataset do CFPB é obtido automaticamente via integração com a Kaggle Hub API, eliminando a necessidade de download manual.
+
+- Autenticação via variável de ambiente `KAGGLE_API_TOKEN`
+- Download realizado diretamente para a pasta `/data`, utilizada pelo pipeline
+- Etapa integrada ao fluxo de execução (Docker / Airflow)
+
+```bash
+# Executar download manual (opcional)
+docker-compose run ingestion python /scripts/download_cfpb.py
 ```
 
 ### 2. Subir Ambiente

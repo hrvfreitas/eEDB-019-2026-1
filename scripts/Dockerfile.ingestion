@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 # Metadados
 LABEL maintainer="Hercules <hrvfreitas>"
-LABEL description="Container para ingestão de dados CFPB"
+LABEL description="Container para download e ingestão de dados CFPB"
 
 # Instalar dependências do sistema
 RUN apt-get update && apt-get install -y \
@@ -14,19 +14,21 @@ RUN apt-get update && apt-get install -y \
 RUN pip install --no-cache-dir \
     pandas==2.2.0 \
     psycopg2-binary==2.9.9 \
-    sqlalchemy==2.0.25
+    sqlalchemy==2.0.25 \
+    kagglehub
 
 # Criar diretórios
 RUN mkdir -p /data /scripts
 
 # Copiar scripts
+COPY download_cfpb.py /scripts/
 COPY ingest_cfpb.py /scripts/
 
-# Tornar executável
-RUN chmod +x /scripts/ingest_cfpb.py
+# Tornar executáveis
+RUN chmod +x /scripts/download_cfpb.py /scripts/ingest_cfpb.py
 
 # Diretório de trabalho
 WORKDIR /scripts
 
-# Comando padrão (pode ser sobrescrito)
-CMD ["python", "/scripts/ingest_cfpb.py"]
+# Executa primeiro o download e depois a ingestão
+CMD ["sh", "-c", "python /scripts/download_cfpb.py && python /scripts/ingest_cfpb.py"]

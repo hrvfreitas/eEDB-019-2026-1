@@ -45,6 +45,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       DATA_PATH: /data/complaints.csv
+      KAGGLE_API_TOKEN: ${KAGGLE_API_TOKEN}
     volumes:
       - ./data:/data
       - ./scripts:/scripts

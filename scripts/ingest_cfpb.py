@@ -42,7 +42,7 @@ class Config:
     DB_TABLE = 'consumer_complaints'
     
     # Dados
-    DATA_PATH = os.getenv('DATA_PATH', '/data/complaints.csv')
+    DATA_PATH = os.getenv('DATA_PATH', '/data/consumer_complaints.csv')
     CHUNK_SIZE = 10000  # Processar 10k linhas por vez
     
     # Mapeamento de colunas CSV → PostgreSQL
