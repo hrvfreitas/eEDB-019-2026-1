@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+*.egg-info/
+.pytest_cache/
+*.log
+
+# Virtual Environments
+env/
+venv/
+.venv/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Airflow
+airflow/logs/*
+!airflow/logs/.gitkeep
+airflow.cfg
+airflow.db
+
+# dbt
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+dbt/.user.yml
+!dbt/profiles/.user.yml
+
+# Great Expectations
+great_expectations/uncommitted/
+
+# Data files
+data/*.csv
+data/*.json
+data/*.parquet
+!data/.gitkeep
+
+# Database
+*.db
+*.sqlite
+
+# Environment
+.env
+.env.local
+
+# Logs
+logs/
+*.log
+
+# Archives
+*.zip
+*.tar
+*.tar.gz

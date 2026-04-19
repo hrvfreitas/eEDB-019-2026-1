@@ -1,0 +1,220 @@
+version: "3.9"
+
+services:
+
+  # ============================================================
+  # POSTGRES (RAW / SILVER / GOLD)
+  # ============================================================
+  postgres:
+    image: postgres:16.2-alpine
+    container_name: projeto_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: projeto
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init_db:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cfpb_network
+
+  # ============================================================
+  # PYTHON INGESTION SERVICE
+  # ============================================================
+  ingestion:
+    build:
+      context: ./scripts
+      dockerfile: Dockerfile.ingestion
+    container_name: projeto_ingestion
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: projeto
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      DATA_PATH: /data/complaints.csv
+    volumes:
+      - ./data:/data
+      - ./scripts:/scripts
+    networks:
+      - cfpb_network
+    profiles:
+      - manual
+
+  # ============================================================
+  # AIRFLOW (ALL-IN-ONE)
+  # Scheduler + Webserver em um único container
+  # ============================================================
+  airflow:
+    image: apache/airflow:2.9.0-python3.11
+    container_name: projeto_airflow
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://postgres:postgres@postgres:5432/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__FERNET_KEY: 'UKMzEm3yIuFYEq1y3-2FxPNWSVwRASpahmQ9kQfEr8E='
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'true'
+      AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: 'true'
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: projeto
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      _PIP_ADDITIONAL_REQUIREMENTS: 'psycopg2-binary pandas great-expectations dbt-core dbt-postgres'
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+      - ./great_expectations:/opt/airflow/great_expectations
+      - ./dbt:/opt/airflow/dbt
+      - ./scripts:/opt/airflow/scripts
+      - ./data:/data
+    command: >
+      bash -c "
+      airflow db migrate &&
+      airflow users create \
+        --username admin \
+        --password admin \
+        --firstname Admin \
+        --lastname User \
+        --role Admin \
+        --email admin@example.com || true &&
+      airflow scheduler &
+      airflow webserver
+      "
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    networks:
+      - cfpb_network
+
+  # ============================================================
+  # DBT (TRANSFORMAÇÕES + DOCS SERVER WEB)
+  # Usa imagem Python oficial + instala dbt
+  # ============================================================
+  dbt:
+    image: python:3.11-slim
+    container_name: projeto_dbt
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    working_dir: /usr/app
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./dbt:/usr/app
+      - ./dbt/profiles:/root/.dbt
+    environment:
+      DBT_PROFILES_DIR: /root/.dbt
+    networks:
+      - cfpb_network
+    command: >
+      bash -c "
+      echo '═══════════════════════════════════════════' &&
+      echo '🚀 dbt Container - Iniciando...' &&
+      echo '═══════════════════════════════════════════' &&
+      echo '' &&
+      echo '📦 Instalando dbt-core e dbt-postgres...' &&
+      pip install --no-cache-dir dbt-core==1.7.13 dbt-postgres==1.7.13 &&
+      echo '✓ dbt instalado' &&
+      echo '' &&
+      echo '📦 Instalando dependências do projeto...' &&
+      dbt deps &&
+      echo '✓ Dependências instaladas' &&
+      echo '' &&
+      echo '🏃 Executando transformações (dbt run)...' &&
+      dbt run &&
+      echo '✓ Transformações concluídas' &&
+      echo '' &&
+      echo '🧪 Executando testes (dbt test)...' &&
+      dbt test || echo '⚠ Alguns testes falharam (continuando...)' &&
+      echo '' &&
+      echo '📚 Gerando documentação (dbt docs generate)...' &&
+      dbt docs generate &&
+      echo '✓ Documentação gerada' &&
+      echo '' &&
+      echo '═══════════════════════════════════════════' &&
+      echo '✅ dbt Docs Server ATIVO' &&
+      echo '═══════════════════════════════════════════' &&
+      echo '' &&
+      echo '🌐 Acesse a documentação em:' &&
+      echo '   http://localhost:8001' &&
+      echo '' &&
+      echo '📊 Recursos disponíveis:' &&
+      echo '   • Lineage Graph (DAG interativo)' &&
+      echo '   • Database Explorer (schemas/tabelas)' &&
+      echo '   • Project View (models organizados)' &&
+      echo '   • Search (busca global)' &&
+      echo '   • Tests Status' &&
+      echo '' &&
+      echo '═══════════════════════════════════════════' &&
+      echo 'Servidor rodando... (Ctrl+C para parar)' &&
+      echo '' &&
+      dbt docs serve --port 8001 --host 0.0.0.0
+      "
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8001 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+  # ============================================================
+  # METABASE (DASHBOARDS BI)
+  # ============================================================
+  metabase:
+    image: metabase/metabase:v0.49.9
+    container_name: projeto_metabase
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      MB_DB_TYPE: postgres
+      MB_DB_DBNAME: projeto
+      MB_DB_PORT: 5432
+      MB_DB_USER: postgres
+      MB_DB_PASS: postgres
+      MB_DB_HOST: postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - metabase_data:/metabase-data
+    networks:
+      - cfpb_network
+
+# ============================================================
+# NETWORKS
+# ============================================================
+networks:
+  cfpb_network:
+    driver: bridge
+
+# ============================================================
+# VOLUMES PERSISTENTES
+# ============================================================
+volumes:
+  postgres_data:
+  metabase_data:

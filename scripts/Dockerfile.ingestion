@@ -1,0 +1,32 @@
+FROM python:3.11-slim
+
+# Metadados
+LABEL maintainer="Hercules <hrvfreitas>"
+LABEL description="Container para ingestão de dados CFPB"
+
+# Instalar dependências do sistema
+RUN apt-get update && apt-get install -y \
+    postgresql-client \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Instalar dependências Python
+RUN pip install --no-cache-dir \
+    pandas==2.2.0 \
+    psycopg2-binary==2.9.9 \
+    sqlalchemy==2.0.25
+
+# Criar diretórios
+RUN mkdir -p /data /scripts
+
+# Copiar scripts
+COPY ingest_cfpb.py /scripts/
+
+# Tornar executável
+RUN chmod +x /scripts/ingest_cfpb.py
+
+# Diretório de trabalho
+WORKDIR /scripts
+
+# Comando padrão (pode ser sobrescrito)
+CMD ["python", "/scripts/ingest_cfpb.py"]
