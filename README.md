@@ -184,14 +184,17 @@ Acesse http://localhost:3001 e conecte ao banco:
 
 ## Capturas de Tela dos Dashboards
 
-> Adicionar screenshots após configurar o Metabase.
+### Tab 1 — Análise das Reclamações por Produto
+![Tab 1](screenshots/tab1-reclamacoes-por-produto.png)
 
-Dashboards sugeridos:
+### Tab 2 — Análise por Empresa, Ano e Canal
+![Tab 2](screenshots/tab2-empresa-ano-canal.png)
 
-1. **Executive Overview** — volume total de reclamações por mês e produto
-2. **Response Performance** — % de respostas tempestivas e média de dias
-3. **Geographic Heatmap** — concentração de reclamações por estado e região
-4. **Dispute Analysis** — taxa de disputas por empresa e tipo de resposta
+### Tab 3 — Análise do Tempo de Resposta
+![Tab 3](screenshots/tab3-tempo-de-resposta.png)
+
+### Tab 4 — Análise de Região
+![Tab 4](screenshots/tab4-analise-regiao.png)
 
 ---
 
