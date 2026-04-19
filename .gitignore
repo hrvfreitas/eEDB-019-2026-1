@@ -8,3 +8,4 @@ data/*.csv
 great_expectations/uncommitted/
 .DS_Store
 *.swp
+.env
