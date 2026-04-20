@@ -2,13 +2,134 @@ version: 2
 
 models:
   - name: fact_complaints
+    description: >
+      Tabela fato central do modelo estrela. Cada linha representa uma reclamação
+      de consumidor registrada no CFPB, com chaves estrangeiras para todas as dimensões
+      e métricas derivadas como response_days e flags de qualidade de resposta.
     columns:
       - name: complaint_sk
+        description: Surrogate key da reclamação (MD5 do complaint_id).
         tests:
           - unique
           - not_null
+      - name: complaint_id
+        description: Identificador original da reclamação no dataset CFPB.
+        tests:
+          - not_null
       - name: product_sk
+        description: Chave estrangeira para dim_product.
         tests:
           - relationships:
               to: ref('dim_product')
               field: product_sk
+      - name: company_sk
+        description: Chave estrangeira para dim_company.
+        tests:
+          - relationships:
+              to: ref('dim_company')
+              field: company_sk
+      - name: geography_sk
+        description: Chave estrangeira para dim_geography.
+      - name: response_days
+        description: Número de dias entre date_received e date_sent_to_company.
+      - name: response_timeliness_category
+        description: Categoria calculada pela macro classify_response_timeliness (Immediate/Fast/Timely/Late/Unknown).
+        tests:
+          - accepted_values:
+              values: ['Immediate', 'Fast', 'Timely', 'Late', 'Unknown']
+      - name: timely_response_flag
+        description: Flag booleana indicando se a resposta foi considerada oportuna pelo CFPB.
+      - name: consumer_disputed_flag
+        description: Flag booleana indicando se o consumidor disputou a resposta da empresa.
+      - name: has_narrative_flag
+        description: Flag indicando se o consumidor forneceu narrativa detalhada da reclamação.
+      - name: submitted_via
+        description: Canal pelo qual a reclamação foi submetida (Web, Phone, Postal mail, etc).
+        tests:
+          - accepted_values:
+              values: ['Web', 'Phone', 'Postal mail', 'Email', 'Fax', 'Referral', 'Unknown']
+              severity: warn
+
+  - name: dim_product
+    description: >
+      Dimensão de produto. Contém a hierarquia completa de produto → sub_produto → issue → sub_issue
+      conforme categorizado pelo CFPB.
+    columns:
+      - name: product_sk
+        description: Surrogate key gerada via dbt_utils.generate_surrogate_key.
+        tests:
+          - unique
+          - not_null
+      - name: product_name
+        description: Nome do produto financeiro (ex. Mortgage, Credit card, Student loan).
+        tests:
+          - not_null
+      - name: sub_product
+        description: Subcategoria do produto financeiro.
+      - name: issue
+        description: Tipo principal de problema relatado.
+      - name: sub_issue
+        description: Subtipo do problema relatado.
+
+  - name: dim_company
+    description: >
+      Dimensão de empresa. Contém a empresa financeira que recebeu a reclamação
+      e o tipo de resposta fornecida ao consumidor.
+    columns:
+      - name: company_sk
+        description: Surrogate key gerada via dbt_utils.generate_surrogate_key.
+        tests:
+          - unique
+          - not_null
+      - name: company_name
+        description: Nome da instituição financeira (normalizado em uppercase).
+        tests:
+          - not_null
+      - name: company_response
+        description: Tipo de resposta da empresa ao consumidor (ex. Closed with explanation).
+
+  - name: dim_geography
+    description: >
+      Dimensão geográfica. Representa o estado e CEP do consumidor que registrou a reclamação,
+      com região calculada pela macro calculate_region.
+    columns:
+      - name: geography_sk
+        description: Surrogate key gerada via dbt_utils.generate_surrogate_key.
+        tests:
+          - unique
+          - not_null
+      - name: state
+        description: Código do estado americano (2 letras, uppercase).
+      - name: region
+        description: Região geográfica calculada pela macro calculate_region (Northeast/Midwest/South/West/Territories/Unknown).
+        tests:
+          - accepted_values:
+              values: ['Northeast', 'Midwest', 'South', 'West', 'Territories', 'Unknown']
+      - name: zip_code
+        description: CEP do consumidor (5 dígitos, com zero à esquerda quando necessário).
+
+  - name: dim_date
+    description: >
+      Dimensão de data (date spine de 2011-01-01 a 2030-12-31). Permite análises
+      temporais por ano, trimestre, mês e dia da semana.
+    columns:
+      - name: date_sk
+        description: Surrogate key no formato YYYYMMDD (integer).
+        tests:
+          - unique
+          - not_null
+      - name: date_actual
+        description: Data completa no formato DATE.
+        tests:
+          - not_null
+      - name: year
+        description: Ano (ex. 2023).
+      - name: quarter
+        description: Trimestre do ano (1 a 4).
+        tests:
+          - accepted_values:
+              values: [1, 2, 3, 4]
+      - name: month
+        description: Mês do ano (1 a 12).
+      - name: is_weekend
+        description: Flag booleana indicando se a data cai em fim de semana.

@@ -1,0 +1,19 @@
+name: daily_validation
+config_version: 1.0
+class_name: Checkpoint
+run_name_template: "%Y%m%d-%H%M%S-daily-validation"
+
+validations:
+  - batch_request:
+      datasource_name: cfpb_postgres
+      data_connector_name: default_inferred_data_connector
+      data_asset_name: raw.consumer_complaints
+    expectation_suite_name: raw_complaints_suite
+
+action_list:
+  - name: store_validation_result
+    action:
+      class_name: StoreValidationResultAction
+  - name: update_data_docs
+    action:
+      class_name: UpdateDataDocsAction

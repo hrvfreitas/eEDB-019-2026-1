@@ -2,17 +2,38 @@ version: 2
 
 sources:
   - name: raw
-    description: Schema RAW com dados do script Python
+    description: >
+      Schema RAW (camada bronze). Dados brutos carregados diretamente do dataset CFPB
+      pelo script Python de ingestão (ingest_cfpb.py), sem transformações.
     database: projeto
     schema: raw
     tables:
       - name: consumer_complaints
-        description: Reclamações CFPB carregadas via script Python
+        description: >
+          Reclamações de consumidores registradas no CFPB (Consumer Financial Protection Bureau).
+          Cada linha representa uma reclamação individual com informações do produto financeiro,
+          empresa, localização geográfica e resposta da empresa.
         columns:
           - name: complaint_id
+            description: Identificador único da reclamação no sistema CFPB.
             tests:
               - unique
               - not_null
           - name: date_received
+            description: Data em que o CFPB recebeu a reclamação.
             tests:
               - not_null
+          - name: product
+            description: Categoria do produto financeiro envolvido na reclamação.
+            tests:
+              - not_null
+          - name: company
+            description: Nome da instituição financeira que recebeu a reclamação.
+            tests:
+              - not_null
+          - name: state
+            description: Código do estado americano do consumidor (2 letras).
+          - name: timely_response
+            description: Indicação se a empresa respondeu dentro do prazo (Yes/No).
+          - name: consumer_disputed
+            description: Indicação se o consumidor contestou a resposta da empresa (Yes/No).
