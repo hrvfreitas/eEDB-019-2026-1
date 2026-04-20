@@ -3,7 +3,7 @@
 Script de Ingestão CFPB - Substituto do Airbyte
 Extrai dados do CSV e carrega no PostgreSQL (schema raw)
 
-Autor: Hercules (NUSP: 5479786)
+
 Projeto: PECE Big Data - Fundamentos de Engenharia de Dados
 """
 
