@@ -2,8 +2,6 @@
 """
 Script de Ingestão CFPB - Substituto do Airbyte
 Extrai dados do CSV e carrega no PostgreSQL (schema raw)
-
-Autor: Hercules (NUSP: 5479786)
 Projeto: PECE Big Data - Fundamentos de Engenharia de Dados
 """
 
@@ -14,7 +12,7 @@ import psycopg2
 from psycopg2 import sql, extras
 from datetime import datetime
 import logging
-from pathlib import Path
+import glob
 
 # ============================================================
 # CONFIGURAÇÃO DE LOGGING
@@ -42,11 +40,12 @@ class Config:
     DB_PASSWORD = os.getenv('POSTGRES_PASSWORD', 'postgres')
     DB_SCHEMA = 'raw'
     DB_TABLE = 'consumer_complaints'
-    
+
     # Dados
-    DATA_PATH = os.getenv('DATA_PATH', '/data/complaints.csv')
+    DATA_BASE_PATH = os.getenv('DATA_BASE_PATH', '/data')
+    FILE_PATTERN = os.getenv('FILE_PATTERN', '*complaints*.csv')
     CHUNK_SIZE = 10000  # Processar 10k linhas por vez
-    
+
     # Mapeamento de colunas CSV → PostgreSQL
     COLUMN_MAPPING = {
         'Date received': 'date_received',
@@ -72,6 +71,24 @@ class Config:
 # ============================================================
 # FUNÇÕES AUXILIARES
 # ============================================================
+def find_complaints_file(base_path=None, file_pattern=None):
+    """Procura por arquivos CSV contendo 'complaints' no nome"""
+    base_path = base_path or Config.DATA_BASE_PATH
+    file_pattern = file_pattern or Config.FILE_PATTERN
+
+    search_pattern = os.path.join(base_path, "**", file_pattern)
+    files = glob.glob(search_pattern, recursive=True)
+
+    if not files:
+        raise FileNotFoundError(
+            f"Nenhum arquivo compatível com o padrão '{file_pattern}' foi encontrado em {base_path}"
+        )
+
+    selected_file = files[0]
+    logger.info(f"✓ Arquivo encontrado automaticamente: {selected_file}")
+
+    return selected_file
+
 def get_db_connection():
     """Cria conexão com PostgreSQL"""
     try:
@@ -114,7 +131,7 @@ def create_table(conn):
         consumer_disputed VARCHAR(10),
         loaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
-    
+
     -- Índices para performance
     CREATE INDEX IF NOT EXISTS idx_complaint_id ON raw.consumer_complaints(complaint_id);
     CREATE INDEX IF NOT EXISTS idx_date_received ON raw.consumer_complaints(date_received);
@@ -122,7 +139,7 @@ def create_table(conn):
     CREATE INDEX IF NOT EXISTS idx_product ON raw.consumer_complaints(product);
     CREATE INDEX IF NOT EXISTS idx_state ON raw.consumer_complaints(state);
     """
-    
+
     try:
         with conn.cursor() as cur:
             cur.execute(create_table_sql)
@@ -153,41 +170,41 @@ def clean_dataframe(df):
     """
     # Renomear colunas conforme mapeamento
     df = df.rename(columns=Config.COLUMN_MAPPING)
-    
+
     # Remover colunas que não estão no mapeamento
     expected_cols = list(Config.COLUMN_MAPPING.values())
     df = df[[col for col in df.columns if col in expected_cols]]
-    
+
     # Converter datas
     date_cols = ['date_received', 'date_sent_to_company']
     for col in date_cols:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors='coerce')
-    
+
     # Limpar ZIP codes (remover sufixos)
     if 'zip_code' in df.columns:
         df['zip_code'] = df['zip_code'].astype(str).str[:5]
         df['zip_code'] = df['zip_code'].replace('nan', None)
-    
+
     # Converter complaint_id para inteiro
     if 'complaint_id' in df.columns:
         df['complaint_id'] = pd.to_numeric(df['complaint_id'], errors='coerce')
-        df = df.dropna(subset=['complaint_id'])  # Remover linhas sem ID
+        df = df.dropna(subset=['complaint_id'])
         df['complaint_id'] = df['complaint_id'].astype(int)
-    
+
     # Substituir NaN por None (NULL no PostgreSQL)
     df = df.where(pd.notnull(df), None)
-    
+
     return df
 
 def insert_batch(conn, df, batch_num):
     """
-    Insere batch de dados usando COPY (mais rápido) ou INSERT em massa
+    Insere batch de dados usando INSERT em massa
     """
     try:
         # Preparar dados para inserção
         records = df.to_dict('records')
-        
+
         # Colunas na ordem correta
         columns = [
             'complaint_id', 'date_received', 'product', 'sub_product',
@@ -197,7 +214,7 @@ def insert_batch(conn, df, batch_num):
             'date_sent_to_company', 'company_response_to_consumer',
             'timely_response', 'consumer_disputed'
         ]
-        
+
         # SQL de inserção com ON CONFLICT (upsert)
         insert_sql = sql.SQL("""
             INSERT INTO raw.consumer_complaints ({})
@@ -225,15 +242,15 @@ def insert_batch(conn, df, batch_num):
             sql.SQL(', ').join(map(sql.Identifier, columns)),
             sql.SQL(', ').join(sql.Placeholder() * len(columns))
         )
-        
+
         with conn.cursor() as cur:
             # Executar inserção em massa
             values = [[rec.get(col) for col in columns] for rec in records]
             extras.execute_batch(cur, insert_sql, values, page_size=1000)
             conn.commit()
-        
+
         logger.info(f"  ✓ Batch {batch_num}: {len(df)} registros inseridos")
-        
+
     except Exception as e:
         logger.error(f"  ✗ Erro ao inserir batch {batch_num}: {e}")
         conn.rollback()
@@ -251,27 +268,27 @@ def validate_data(conn):
             
             # Registros com datas válidas
             cur.execute("""
-                SELECT COUNT(*) 
-                FROM raw.consumer_complaints 
+                SELECT COUNT(*)
+                FROM raw.consumer_complaints
                 WHERE date_received IS NOT NULL;
             """)
             valid_dates = cur.fetchone()[0]
-            
+
             # Produtos distintos
             cur.execute("""
-                SELECT COUNT(DISTINCT product) 
+                SELECT COUNT(DISTINCT product)
                 FROM raw.consumer_complaints;
             """)
             distinct_products = cur.fetchone()[0]
-            
-            logger.info("\n" + "="*60)
+
+            logger.info("\n" + "=" * 60)
             logger.info("📊 VALIDAÇÃO DE DADOS")
-            logger.info("="*60)
+            logger.info("=" * 60)
             logger.info(f"Total de registros: {total:,}")
             logger.info(f"Registros com data válida: {valid_dates:,} ({valid_dates/total*100:.1f}%)")
             logger.info(f"Produtos distintos: {distinct_products}")
-            logger.info("="*60 + "\n")
-            
+            logger.info("=" * 60 + "\n")
+
     except Exception as e:
         logger.error(f"✗ Erro na validação: {e}")
 
@@ -283,76 +300,78 @@ def main():
     Função principal de ingestão
     """
     start_time = datetime.now()
-    logger.info("\n" + "="*60)
+    logger.info("\n" + "=" * 60)
     logger.info("🚀 INICIANDO INGESTÃO CFPB")
-    logger.info("="*60)
+    logger.info("=" * 60)
     logger.info(f"Data/Hora: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
-    logger.info(f"Arquivo: {Config.DATA_PATH}")
+    logger.info(f"Diretório base de busca: {Config.DATA_BASE_PATH}")
+    logger.info(f"Padrão de arquivo: {Config.FILE_PATTERN}")
     logger.info(f"Destino: {Config.DB_HOST}:{Config.DB_PORT}/{Config.DB_NAME}")
     logger.info(f"Schema: {Config.DB_SCHEMA}")
     logger.info(f"Tabela: {Config.DB_TABLE}")
-    logger.info("="*60 + "\n")
-    
-    # Verificar se arquivo existe
-    if not os.path.exists(Config.DATA_PATH):
-        logger.error(f"✗ Arquivo não encontrado: {Config.DATA_PATH}")
-        logger.info(f"💡 Dica: Baixe o dataset com:")
-        logger.info(f"   curl -o {Config.DATA_PATH} 'https://files.consumerfinance.gov/ccdb/complaints.csv'")
+    logger.info("=" * 60 + "\n")
+
+    try:
+        data_path = find_complaints_file()
+    except FileNotFoundError as e:
+        logger.error(f"✗ {e}")
         sys.exit(1)
-    
+
+    logger.info(f"Arquivo selecionado: {data_path}")
+
     # Conectar ao banco
     conn = get_db_connection()
-    
+
     try:
         # Criar tabela
         create_table(conn)
         
         # Truncar para Full Refresh
         truncate_table(conn)
-        
+
         # Processar CSV em chunks
         logger.info("📥 Processando CSV em chunks...")
         total_records = 0
         batch_num = 0
-        
+
         for chunk in pd.read_csv(
-            Config.DATA_PATH,
+            data_path,
             chunksize=Config.CHUNK_SIZE,
             low_memory=False,
             encoding='utf-8'
         ):
             batch_num += 1
             logger.info(f"\n📦 Processando batch {batch_num}...")
-            
+
             # Limpar dados
             chunk = clean_dataframe(chunk)
-            
+
             # Inserir no banco
             insert_batch(conn, chunk, batch_num)
-            
+
             total_records += len(chunk)
             logger.info(f"  Total acumulado: {total_records:,} registros")
-        
+
         # Validar dados
         validate_data(conn)
-        
+
         # Finalizar
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
-        
-        logger.info("\n" + "="*60)
+
+        logger.info("\n" + "=" * 60)
         logger.info("✅ INGESTÃO CONCLUÍDA COM SUCESSO!")
-        logger.info("="*60)
+        logger.info("=" * 60)
         logger.info(f"Total de registros: {total_records:,}")
         logger.info(f"Total de batches: {batch_num}")
         logger.info(f"Tempo de execução: {duration:.2f} segundos ({duration/60:.2f} min)")
         logger.info(f"Taxa: {total_records/duration:.0f} registros/segundo")
-        logger.info("="*60 + "\n")
-        
+        logger.info("=" * 60 + "\n")
+
     except Exception as e:
         logger.error(f"\n✗ ERRO NA INGESTÃO: {e}")
         sys.exit(1)
-    
+
     finally:
         conn.close()
         logger.info("Conexão fechada")
