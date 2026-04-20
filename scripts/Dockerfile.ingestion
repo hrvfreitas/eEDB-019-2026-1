@@ -23,6 +23,7 @@ RUN mkdir -p /data /scripts
 # Copiar scripts
 COPY download_cfpb.py /scripts/
 COPY ingest_cfpb.py /scripts/
+COPY download_kaggle.py /scripts/
 
 # Tornar executáveis
 RUN chmod +x /scripts/download_cfpb.py /scripts/ingest_cfpb.py

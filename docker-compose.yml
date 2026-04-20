@@ -38,6 +38,8 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       DATA_PATH: /data/complaints.csv
+      KAGGLE_USERNAME: ${KAGGLE_USERNAME}
+      KAGGLE_KEY: ${KAGGLE_KEY}
     volumes:
       - ./data:/data
       - ./scripts:/scripts
@@ -67,7 +69,7 @@ services:
       POSTGRES_DB: projeto
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      _PIP_ADDITIONAL_REQUIREMENTS: 'psycopg2-binary pandas great-expectations dbt-core dbt-postgres'
+      _PIP_ADDITIONAL_REQUIREMENTS: 'psycopg2-binary pandas great-expectations==0.18.19 dbt-core dbt-postgres==1.7.0'
     ports:
       - "8080:8080"
     volumes:
@@ -144,7 +146,7 @@ services:
     container_name: projeto_metabase
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3001:3000"
     environment:
       MB_DB_TYPE: postgres
       MB_DB_DBNAME: projeto
