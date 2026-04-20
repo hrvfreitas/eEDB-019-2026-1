@@ -4,7 +4,11 @@ __pycache__/
 target/
 dbt_packages/
 logs/
-data/*.csv
+data/
+*.csv
+*.sqlite
+*.db
 great_expectations/uncommitted/
 .DS_Store
 *.swp
+
