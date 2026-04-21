@@ -59,10 +59,10 @@ def check_data_quality(**context):
         
         with conn.cursor() as cur:
             # Verificar contagem de registros no gold
-            cur.execute("SELECT COUNT(*) FROM gold.fact_complaints;")
+            cur.execute("SELECT COUNT(*) FROM silver_gold.fact_complaints;")
             count = cur.fetchone()[0]
             
-            logger.info(f"✅ Qualidade OK: {count:,} registros em gold.fact_complaints")
+            logger.info(f"✅ Qualidade OK: {count:,} registros em silver_gold.fact_complaints")
             
             if count < 100000:
                 logger.warning(f"⚠️ ATENÇÃO: Apenas {count} registros (esperado >100k)")
@@ -105,7 +105,7 @@ run_python_ingestion = BashOperator(
 # TASK 3: Executar Great Expectations
 run_great_expectations = BashOperator(
     task_id='run_great_expectations',
-    bash_command='cd /opt/airflow/great_expectations && great_expectations checkpoint run daily_validation',
+    bash_command='great_expectations -c /opt/airflow/great_expectations/great_expectations.yml checkpoint run daily_validation',
     dag=dag,
 )
 

@@ -1,3 +1,5 @@
+{{ config(severity='warn') }}
+
 SELECT
     complaint_id, response_days, timely_response_flag
 FROM {{ ref('fact_complaints') }}

@@ -14,7 +14,11 @@ cleaned AS (
         {{ dbt_utils.generate_surrogate_key(['complaint_id']) }} AS complaint_sk,
         CAST(complaint_id AS BIGINT) AS complaint_id,
         CAST(date_received AS DATE) AS date_received,
-        CAST(date_sent_to_company AS DATE) AS date_sent_to_company,
+        CASE
+            WHEN CAST(date_sent_to_company AS DATE) >= CAST(date_received AS DATE)
+            THEN CAST(date_sent_to_company AS DATE)
+            ELSE NULL
+        END AS date_sent_to_company,
         COALESCE(NULLIF(TRIM(product), ''), 'Not Specified') AS product,
         COALESCE(NULLIF(TRIM(sub_product), ''), 'Not Specified') AS sub_product,
         COALESCE(NULLIF(TRIM(issue), ''), 'Not Specified') AS issue,

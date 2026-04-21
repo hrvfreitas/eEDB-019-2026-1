@@ -12,7 +12,7 @@ WITH date_spine AS (
 
 SELECT
     CAST(TO_CHAR(date_day, 'YYYYMMDD') AS INTEGER) AS date_sk,
-    date_day AS full_date,
+    date_day AS date_actual,
     EXTRACT(YEAR FROM date_day) AS year,
     EXTRACT(QUARTER FROM date_day) AS quarter,
     EXTRACT(MONTH FROM date_day) AS month,
